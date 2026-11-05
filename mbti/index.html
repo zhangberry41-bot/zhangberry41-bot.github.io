@@ -180,6 +180,7 @@
       .result-code .letter{
         font-family:"Noto Serif SC",serif; font-size:clamp(52px,13vw,84px); font-weight:900; line-height:1;
       }
+      .result-code .dog{ font-size:clamp(96px,24vw,160px); line-height:1; display:block; }
       .result-name{ font-size:clamp(26px,5vw,36px); font-weight:900; margin-top:14px; }
       .result-name .en{ font-size:.55em; color:var(--faint); font-family:"Noto Sans SC",sans-serif; font-weight:700; margin-left:8px; }
       .result-tagline{ font-size:18px; color:var(--accent); font-weight:700; margin-top:8px; }
@@ -696,66 +697,24 @@
       var lastResult = null;
       function finishQuiz(){
         $("progressFill").style.width = "100%";
-        var counts = { E:0, I:0, S:0, N:0, T:0, F:0, J:0, P:0 };
-        QUESTIONS.forEach(function(q, i){ if (answers[i]) counts[answers[i]]++; });
-        var pairs = [ ["E","I"], ["S","N"], ["T","F"], ["J","P"] ];
-        var code = "";
-        var dims = pairs.map(function(pair){
-          var total = counts[pair[0]] + counts[pair[1]] || 1;
-          var win = counts[pair[0]] >= counts[pair[1]] ? pair[0] : pair[1];
-          code += win;
-          return { pair:pair, win:win, pct0:Math.round(counts[pair[0]] / total * 100), pct1:Math.round(counts[pair[1]] / total * 100), winPct:Math.round(counts[win] / total * 100) };
-        });
-        lastResult = { code:code, dims:dims, counts:counts };
+        lastResult = { code:"🐶", dims:[], counts:{} };
         renderResult();
         showView("view-result");
       }
 
-      function barNote(d){
-        var strength = d.winPct >= 75 ? "倾向非常鲜明" : (d.winPct >= 60 ? "倾向比较明显" : "两边比较接近，属于可盐可甜的中间地带");
-        return "你更偏向「" + POLE_NAME[d.win] + "」这一端，" + strength + "。";
-      }
-
       function renderResult(){
-        var t = TYPES[lastResult.code];
-        var dimKeys = ["EI","SN","TF","JP"];
-        var codeHtml = "";
-        lastResult.code.split("").forEach(function(letter, i){
-          codeHtml += '<span class="letter" style="color:' + DIM_COLOR[dimKeys[i]] + '">' + letter + '</span>';
-        });
-        $("rCode").innerHTML = codeHtml;
-        $("rName").innerHTML = t.name + '<span class="en">' + t.en + '</span>';
-        $("rTagline").textContent = t.tag;
-        $("rDesc").textContent = t.desc;
-        $("rChips").innerHTML = t.traits.map(function(x){ return '<span class="chip">' + x + '</span>'; }).join("");
-
-        var barsHtml = "";
-        lastResult.dims.forEach(function(d, i){
-          var leftWin = d.win === d.pair[0];
-          var fillPct = leftWin ? d.pct0 : d.pct1;
-          var fillLeft = leftWin ? "0" : (100 - d.pct1) + "%";
-          var color = DIM_COLOR[dimKeys[i]];
-          barsHtml += '<div class="bar-row">' +
-            '<div class="bar-poles">' +
-              '<span class="pole' + (leftWin ? " win" : "") + '"><b>' + d.pair[0] + '</b> ' + POLE_NAME[d.pair[0]] + ' · ' + d.pct0 + '%</span>' +
-              '<span class="dim-name">' + DIM_LABEL[dimKeys[i]].split(" · ")[0] + '</span>' +
-              '<span class="pole' + (!leftWin ? " win" : "") + '">' + d.pct1 + '% · ' + POLE_NAME[d.pair[1]] + ' <b>' + d.pair[1] + '</b></span>' +
-            '</div>' +
-            '<div class="bar-track"><div class="bar-fill" style="left:' + fillLeft + ';width:0%;background:' + color + '" data-w="' + fillPct + '"></div></div>' +
-            '<div class="bar-note">' + barNote(d) + '</div></div>';
-        });
-        $("rBars").innerHTML = barsHtml;
-        requestAnimationFrame(function(){
-          setTimeout(function(){
-            var fills = document.querySelectorAll(".bar-fill");
-            for (var i = 0; i < fills.length; i++) fills[i].style.width = fills[i].getAttribute("data-w") + "%";
-          }, 60);
-        });
-
-        $("rStrengths").innerHTML = liList(t.strengths);
-        $("rBlinds").innerHTML = liList(t.blinds);
-        $("rCareers").innerHTML = tagList(t.careers);
-        $("rRelation").textContent = t.relation;
+        $("rCode").innerHTML = '<span class="dog" role="img" aria-label="狗">🐶</span>';
+        $("rName").style.display = "none";
+        $("rTagline").style.display = "none";
+        $("rDesc").style.display = "none";
+        $("rChips").innerHTML = "";
+        $("rChips").style.display = "none";
+        var bars = document.querySelector(".bars");
+        if (bars) bars.style.display = "none";
+        var cols = document.querySelector(".result-cols");
+        if (cols) cols.style.display = "none";
+        var disc = document.querySelector("#view-result .disclaimer");
+        if (disc) disc.style.display = "none";
       }
 
       $("retestBtn").addEventListener("click", function(){
@@ -773,11 +732,7 @@
       });
       $("copyBtn").addEventListener("click", function(){
         if (!lastResult) return;
-        var t = TYPES[lastResult.code];
-        var dimText = lastResult.dims.map(function(d){
-          return d.pair.join("/") + " 偏" + d.win + "（" + d.winPct + "%）";
-        }).join(" · ");
-        var text = "我的 MBTI 是 " + lastResult.code + "「" + t.name + "」——" + t.tag + "\n四维倾向：" + dimText + "\n" + t.desc;
+        var text = "我的 MBTI 测试结果是：🐶";
         function done(){ showToast("结果已复制，去分享给朋友吧"); }
         function fallback(){
           var ta = document.createElement("textarea");
