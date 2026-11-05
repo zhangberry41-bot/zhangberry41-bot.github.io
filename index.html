@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Berry 的小玩意儿</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    min-height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    background: radial-gradient(1200px 800px at 50% 30%, #2a1650 0%, #12081f 55%, #07030d 100%);
+    color:#e9e2ff; font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif; padding:32px 20px;
+  }
+  h1 { font-size:30px; letter-spacing:.35em; text-indent:.35em; font-weight:600; margin-bottom:10px; }
+  p.sub { color:#a794d6; font-size:14px; letter-spacing:.2em; margin-bottom:44px; }
+  .cards { display:flex; gap:22px; flex-wrap:wrap; justify-content:center; }
+  a.card {
+    width:280px; text-decoration:none; color:inherit; border:1px solid rgba(190,160,255,.28);
+    border-radius:18px; padding:30px 26px; background:rgba(255,255,255,.045);
+    transition:transform .25s, border-color .25s, background .25s;
+  }
+  a.card:hover { transform:translateY(-5px); border-color:rgba(220,190,255,.65); background:rgba(255,255,255,.08); }
+  .emoji { font-size:42px; margin-bottom:16px; }
+  .card h2 { font-size:20px; margin-bottom:8px; letter-spacing:.08em; }
+  .card p { font-size:13.5px; line-height:1.7; color:#bdb0e4; }
+  footer { margin-top:48px; font-size:12px; color:#6f5fa3; letter-spacing:.15em; }
+</style>
+</head>
+<body>
+  <h1>万物随手而生</h1>
+  <p class="sub">两个可以直接打开玩的小页面</p>
+  <div class="cards">
+    <a class="card" href="./particles/">
+      <div class="emoji">🪐</div>
+      <h2>手势粒子</h2>
+      <p>对着摄像头挥挥手，两万颗粒子随手而动：张掌绽放、握拳聚合，还能跟着音乐律动、双手拉开星河、拼字拼图。</p>
+    </a>
+    <a class="card" href="./tarot/">
+      <div class="emoji">🔮</div>
+      <h2>塔罗占卜</h2>
+      <p>完整的 78 张韦特塔罗：写下问题，选牌阵，洗牌抽牌，正位逆位全解读，还有每日一抽和幸运色。</p>
+    </a>
+  </div>
+  <footer>BERRY'S PLAYGROUND</footer>
+</body>
+</html>

@@ -1,0 +1,1100 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="color-scheme" content="dark" />
+<link rel="icon" href="data:," />
+<title>手势粒子 · 万物随手而生</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700;900&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --bg:#040309;
+    --panel:rgba(16,13,32,.72);
+    --panel-brd:rgba(167,139,250,.22);
+    --ink:#f2eefc;
+    --ink-dim:rgba(226,220,248,.62);
+    --ink-faint:rgba(226,220,248,.38);
+    --accent:#a78bfa;
+    --accent-2:#7c5cf0;
+    --good:#5eead4;
+    --warn:#fbbf24;
+    --radius:16px;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%}
+  body{
+    margin:0;background:var(--bg);color:var(--ink);
+    font-family:"Noto Sans SC","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+    overflow:hidden;
+  }
+  #scene{position:fixed;inset:0;width:100%;height:100%;display:block;cursor:grab;touch-action:none}
+  #scene:active{cursor:grabbing}
+
+  /* ---------- top-left title (matches the video) ---------- */
+  .masthead{position:fixed;top:22px;left:26px;z-index:5;pointer-events:none;max-width:min(420px,72vw)}
+  .masthead .kicker{font-size:10px;letter-spacing:.32em;color:var(--ink-faint);font-weight:500;margin-bottom:8px}
+  .masthead h1{margin:0;font-size:clamp(26px,4.2vw,40px);font-weight:900;letter-spacing:.04em;line-height:1.15;text-shadow:0 0 34px rgba(139,92,246,.55)}
+  .masthead p{margin:9px 0 0;font-size:12.5px;line-height:1.7;color:var(--ink-dim);font-weight:300}
+
+  /* ---------- status pill top-right ---------- */
+  .status-pill{
+    position:fixed;top:24px;right:24px;z-index:6;display:flex;align-items:center;gap:8px;
+    background:var(--panel);border:1px solid var(--panel-brd);border-radius:999px;
+    padding:8px 14px;font-size:12px;color:var(--ink-dim);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+  }
+  .status-pill .dot{width:8px;height:8px;border-radius:50%;background:var(--warn);box-shadow:0 0 10px var(--warn);flex:none}
+  .status-pill.on .dot{background:var(--good);box-shadow:0 0 10px var(--good)}
+  .status-pill b{color:var(--ink);font-weight:500}
+
+  /* ---------- camera card (video PiP, like the original) ---------- */
+  .cam-card{
+    position:fixed;left:26px;bottom:118px;z-index:6;width:196px;
+    background:var(--panel);border:1px solid var(--panel-brd);border-radius:var(--radius);
+    overflow:hidden;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+  }
+  .cam-view{position:relative;aspect-ratio:4/3;background:#0a0718}
+  .cam-view video,.cam-view canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}
+  .cam-view video{opacity:0;transition:opacity .4s}
+  .cam-view.live video{opacity:1}
+  .cam-placeholder{
+    position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;
+    color:var(--ink-faint);font-size:11.5px;text-align:center;padding:10px;line-height:1.6;
+  }
+  .cam-view.live .cam-placeholder{display:none}
+  .cam-placeholder svg{opacity:.65}
+  .cam-meta{padding:9px 12px 11px;display:flex;align-items:center;justify-content:space-between;gap:8px}
+  .cam-meta .g-name{font-size:12.5px;font-weight:700}
+  .cam-meta .g-hint{font-size:10.5px;color:var(--ink-faint);margin-top:2px}
+  .cam-meta .live-tag{font-size:10px;color:var(--good);border:1px solid rgba(94,234,212,.4);border-radius:999px;padding:2px 8px;display:none;flex:none}
+  .cam-card.live .live-tag{display:block}
+
+  /* ---------- gesture toast centre ---------- */
+  .gesture-toast{
+    position:fixed;left:50%;bottom:196px;transform:translateX(-50%) translateY(8px);z-index:5;
+    font-size:14px;font-weight:500;letter-spacing:.14em;color:var(--ink);
+    background:rgba(10,7,24,.55);border:1px solid rgba(167,139,250,.28);border-radius:999px;padding:8px 20px;
+    opacity:0;transition:opacity .35s,transform .35s;pointer-events:none;white-space:nowrap;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+  }
+  .gesture-toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  .gesture-toast span{color:var(--accent)}
+
+  /* ---------- shape readout bottom-left ---------- */
+  .readout{position:fixed;left:26px;bottom:26px;z-index:5;pointer-events:none}
+  .readout .shape-name{font-size:21px;font-weight:900;letter-spacing:.06em}
+  .readout .shape-name em{font-style:normal;color:var(--accent)}
+  .readout .stats{margin-top:5px;font-size:11px;color:var(--ink-faint);letter-spacing:.12em}
+
+  /* ---------- guide panel right ---------- */
+  .guide{
+    position:fixed;right:24px;top:50%;transform:translateY(-50%);z-index:5;width:196px;
+    background:var(--panel);border:1px solid var(--panel-brd);border-radius:var(--radius);
+    padding:15px 16px 11px;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+  }
+  .guide h2{margin:0 0 10px;font-size:11px;letter-spacing:.26em;color:var(--ink-faint);font-weight:500}
+  .guide ul{list-style:none;margin:0;padding:0}
+  .guide li{display:flex;gap:10px;align-items:baseline;padding:6.5px 0;border-top:1px solid rgba(167,139,250,.1);font-size:12px}
+  .guide li:first-of-type{border-top:none}
+  .guide .g{flex:none;width:52px;font-weight:700;color:var(--ink)}
+  .guide .d{color:var(--ink-dim);font-size:11.5px;line-height:1.5}
+  .guide li.active .g{color:var(--accent)}
+  .guide li.active .d{color:var(--ink)}
+
+  /* ---------- bottom dock ---------- */
+  .dock{
+    position:fixed;left:50%;bottom:22px;transform:translateX(-50%);z-index:7;
+    display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:center;
+    background:var(--panel);border:1px solid var(--panel-brd);border-radius:20px;
+    padding:9px 10px;backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
+    max-width:min(97vw,1240px);
+  }
+  .dock .sep{width:1px;align-self:stretch;background:rgba(167,139,250,.18);margin:2px 3px;flex:none}
+  .dock button{
+    appearance:none;border:1px solid transparent;background:transparent;color:var(--ink-dim);
+    font-family:inherit;font-size:13px;font-weight:500;padding:8px 13px;border-radius:12px;cursor:pointer;
+    transition:all .18s;white-space:nowrap;
+  }
+  .dock button:hover{color:var(--ink);background:rgba(167,139,250,.12)}
+  .dock button.on{color:#fff;background:linear-gradient(135deg,var(--accent-2),#5b3df0);box-shadow:0 4px 18px rgba(124,92,240,.45)}
+  .dock button.primary{color:#fff;background:linear-gradient(135deg,#8b5cf6,#6d28d9);box-shadow:0 4px 18px rgba(139,92,246,.5);font-weight:700}
+  .dock button.primary:hover{filter:brightness(1.12)}
+  .dock button.primary.on-cam{background:linear-gradient(135deg,#0d9488,#0f766e);box-shadow:0 4px 18px rgba(45,212,191,.35)}
+  .swatches{display:flex;align-items:center;gap:7px;padding:0 4px}
+  .swatch{width:19px;height:19px;border-radius:50%;border:2px solid transparent;cursor:pointer;padding:0;flex:none;transition:transform .15s,border-color .15s}
+  .swatch:hover{transform:scale(1.18)}
+  .swatch.on{border-color:#fff;transform:scale(1.12)}
+
+  .err-bar{
+    position:fixed;left:50%;top:74px;transform:translateX(-50%);z-index:9;max-width:92vw;
+    background:rgba(60,20,20,.85);border:1px solid rgba(248,113,113,.45);color:#fecaca;
+    font-size:12.5px;line-height:1.6;border-radius:12px;padding:10px 16px;display:none;
+  }
+  .err-bar.show{display:block}
+
+  /* ---------- atmosphere layers ---------- */
+  .core-glow{
+    position:fixed;left:50%;top:50%;width:64vmin;height:64vmin;z-index:1;pointer-events:none;
+    transform:translate(-50%,-50%);border-radius:50%;mix-blend-mode:screen;filter:blur(6px);opacity:.45;
+    background:radial-gradient(circle,rgba(139,92,246,.34) 0%,rgba(139,92,246,.12) 42%,transparent 68%);
+  }
+  .vignette{
+    position:fixed;inset:0;z-index:2;pointer-events:none;
+    background:radial-gradient(ellipse at 50% 46%,transparent 50%,rgba(2,1,8,.38) 82%,rgba(1,0,6,.66) 100%);
+  }
+
+  /* ---------- energy meter ---------- */
+  .energy{display:flex;align-items:center;gap:9px;margin-top:10px}
+  .energy .e-label{font-size:10px;letter-spacing:.24em;color:var(--ink-faint);flex:none}
+  .energy .e-track{width:118px;height:4px;border-radius:99px;background:rgba(167,139,250,.16);overflow:hidden;flex:none}
+  .energy .e-fill{height:100%;width:38%;border-radius:99px;background:linear-gradient(90deg,var(--accent-2),#c4b0fb);box-shadow:0 0 8px rgba(167,139,250,.7)}
+  .energy .e-val{font-size:10.5px;color:var(--ink-dim);letter-spacing:.1em}
+
+  /* ---------- play extras bar ---------- */
+  .extras{
+    position:fixed;left:50%;bottom:96px;transform:translateX(-50%);z-index:7;
+    display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:center;
+    background:var(--panel);border:1px solid var(--panel-brd);border-radius:16px;
+    padding:8px 10px;backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
+    max-width:min(96vw,880px);
+  }
+  .extras .x-label{font-size:10px;letter-spacing:.24em;color:var(--ink-faint);padding:0 4px;flex:none}
+  .extras button{
+    appearance:none;border:1px solid transparent;background:transparent;color:var(--ink-dim);
+    font-family:inherit;font-size:13px;font-weight:500;padding:8px 12px;border-radius:11px;cursor:pointer;
+    transition:all .18s;white-space:nowrap;
+  }
+  .extras button:hover{color:var(--ink);background:rgba(167,139,250,.12)}
+  .extras button.on{color:#fff;background:linear-gradient(135deg,var(--accent-2),#5b3df0);box-shadow:0 4px 16px rgba(124,92,240,.45)}
+  .extras button.recording{color:#fff;background:linear-gradient(135deg,#e11d48,#9f1239);box-shadow:0 4px 16px rgba(225,29,72,.45)}
+  .extras input{
+    background:rgba(255,255,255,.05);border:1px solid var(--panel-brd);color:var(--ink);
+    border-radius:10px;padding:8px 11px;font-family:inherit;font-size:13px;width:132px;outline:none;
+  }
+  .extras input::placeholder{color:var(--ink-faint)}
+  .extras input:focus{border-color:var(--accent)}
+  @media (max-width:1340px){ .extras{bottom:166px} }
+  @media (max-width:1150px){ .extras{left:auto;right:24px;transform:none;max-width:min(58vw,540px)} }
+  @media (max-width:900px){ .guide{display:none} }
+  @media (max-width:640px){
+    .masthead{top:58px;left:18px}
+    .masthead .kicker{display:none}
+    .masthead p{display:none}
+    .status-pill{top:14px;right:14px;padding:6px 11px;font-size:11px}
+    .cam-card{left:14px;bottom:auto;top:128px;width:124px}
+    .readout{left:18px;bottom:252px}
+    .extras{left:50%;right:auto;transform:translateX(-50%);bottom:150px;max-width:96vw;padding:7px;gap:4px}
+    .extras button{font-size:12px;padding:7px 9px}
+    .extras input{width:96px;font-size:12px;padding:7px 8px}
+    .extras .x-label{display:none}
+    .readout .shape-name{font-size:17px}
+    .readout .stats{display:none}
+    .energy{display:none}
+    .dock{left:10px;right:10px;transform:none;bottom:12px;border-radius:16px;padding:7px;gap:4px;justify-content:center}
+    .dock .sep{display:none}
+    .dock button{font-size:12px;padding:7px 9px}
+    .dock #btnFull{display:none}
+    .swatch{width:16px;height:16px}
+    .gesture-toast{bottom:auto;top:330px;font-size:12.5px}
+  }
+  @media (prefers-reduced-motion:reduce){
+    .gesture-toast{transition:none}
+  }
+</style>
+</head>
+<body>
+
+<canvas id="scene"></canvas>
+<div class="core-glow" id="coreGlow"></div>
+<div class="vignette"></div>
+
+<header class="masthead">
+  <div class="kicker">GESTURE × PARTICLE × INTERACTION</div>
+  <h1>万物，随手而生。</h1>
+  <p>当指尖成为指令，粒子便有了生命。张开手掌让它绽放，握紧拳头让它聚合——点下方「开启摄像头」用手势指挥，或试试音乐律动、双手模式、粒子拼字和指尖引力井。</p>
+</header>
+
+<div class="status-pill" id="statusPill"><span class="dot"></span><span id="statusText">鼠标模式 · <b>未开启摄像头</b></span></div>
+
+<div class="err-bar" id="errBar"></div>
+
+<aside class="cam-card" id="camCard">
+  <div class="cam-view" id="camView">
+    <video id="camVideo" playsinline muted></video>
+    <canvas id="camOverlay" width="320" height="240"></canvas>
+    <div class="cam-placeholder">
+      <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M18 11V6.5a1.5 1.5 0 0 0-3 0V11m0-5.5v-2a1.5 1.5 0 0 0-3 0V11m0-7.5a1.5 1.5 0 0 0-3 0V12m6-1a1.5 1.5 0 0 1 3 0v1a7 7 0 0 1-7 7h-1.2c-2 0-3.4-.9-4.6-2.6L3.4 13a1.6 1.6 0 0 1 2.5-2L7 12.5V6a1.5 1.5 0 0 1 3 0"/></svg>
+      <div>摄像头画面会显示在这里<br/>手掌骨架实时描出</div>
+    </div>
+  </div>
+  <div class="cam-meta">
+    <div>
+      <div class="g-name" id="gestureName">等待手势</div>
+      <div class="g-hint" id="gestureHint">开启摄像头后对镜头做手势</div>
+    </div>
+    <span class="live-tag">识别中</span>
+  </div>
+</aside>
+
+<div class="gesture-toast" id="gestureToast"></div>
+
+<div class="readout">
+  <div class="shape-name"><span id="readoutShape">土星</span> <em>·</em> <span id="readoutMood">环绕</span></div>
+  <div class="stats"><span id="statParticles">— 粒子</span> &nbsp;·&nbsp; <span id="statFps">— FPS</span> &nbsp;·&nbsp; <span id="statGesture">手势 —</span> &nbsp;·&nbsp; 滚轮缩放 · 双击翻转 · 按住拖动是引力井</div>
+  <div class="energy"><span class="e-label">能量</span><span class="e-track"><span class="e-fill" id="energyFill" style="display:block"></span></span><span class="e-val" id="energyVal">舒展</span></div>
+</div>
+
+<nav class="guide" aria-label="手势指南">
+  <h2>手势指南</h2>
+  <ul>
+    <li data-g="open"><span class="g">张开手掌</span><span class="d">粒子向外绽放扩散</span></li>
+    <li data-g="fist"><span class="g">握紧拳头</span><span class="d">粒子向中心聚合收紧</span></li>
+    <li data-g="pinch"><span class="g">拇指捏合</span><span class="d">捏的松紧控制缩放</span></li>
+    <li data-g="point"><span class="g">伸出食指</span><span class="d">搅动粒子，加速旋转</span></li>
+    <li data-g="two"><span class="g">双指比耶</span><span class="d">舒缓旋转，微微张开</span></li>
+    <li data-g="move"><span class="g">移动手掌</span><span class="d">手在上方持续翻转，能翻整圈；下方翻回</span></li>
+    <li data-g="duo"><span class="g">双手开合</span><span class="d">合拢聚合，拉开成星河</span></li>
+    <li data-g="well"><span class="g">按住拖动</span><span class="d">指尖成引力井，卷入粒子</span></li>
+  </ul>
+</nav>
+
+<div class="dock" role="toolbar">
+  <button id="btnCam" class="primary">开启摄像头</button>
+  <span class="sep"></span>
+  <button data-shape="saturn" class="on">土星</button>
+  <button data-shape="galaxy">星系</button>
+  <button data-shape="nebula">星云</button>
+  <button data-shape="sphere">星球</button>
+  <button data-shape="heart">爱心</button>
+  <button data-shape="helix">双螺旋</button>
+  <button data-shape="supernova">超新星</button>
+  <button data-shape="butterfly">蝶翼</button>
+  <button data-shape="blackhole">黑洞</button>
+  <span class="sep"></span>
+  <div class="swatches" id="swatches"></div>
+  <span class="sep"></span>
+  <button id="btnBurst">绽放</button>
+  <button id="btnFull">全屏</button>
+</div>
+
+<div class="extras" role="toolbar" aria-label="更多玩法">
+  <span class="x-label">新玩法</span>
+  <button id="btnMusic">音乐律动</button>
+  <button id="btnDuo">双手模式</button>
+  <input id="textInput" type="text" maxlength="8" placeholder="输入文字拼字" aria-label="拼字文字" />
+  <button id="btnText">拼字</button>
+  <button id="btnPhoto">照片成形</button>
+  <input id="filePhoto" type="file" accept="image/*" hidden />
+  <button id="btnRec">录制视频</button>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+<script>
+(function(){
+"use strict";
+/* ============================================================
+   Particle engine — canvas 2D pseudo-3D, spring-to-target morph
+   ============================================================ */
+var canvas = document.getElementById('scene');
+var ctx = canvas.getContext('2d');
+var W=0,H=0,DPR=1,CX=0,CY=0;
+
+var isSmall = Math.min(window.innerWidth, window.innerHeight) < 640;
+var N = isSmall ? 10000 : 20000;
+var drawN = N; // adaptive: trimmed automatically if the frame rate sags
+
+var px=new Float32Array(N), py=new Float32Array(N), pz=new Float32Array(N);
+var vx=new Float32Array(N), vy=new Float32Array(N), vz=new Float32Array(N);
+var tx=new Float32Array(N), ty=new Float32Array(N), tz=new Float32Array(N);
+var pSize=new Float32Array(N), pPhase=new Float32Array(N), pShade=new Uint8Array(N);
+var i;
+for(i=0;i<N;i++){ pSize[i]=0.6+Math.random()*1.5; pPhase[i]=Math.random()*Math.PI*2; pShade[i]=(Math.random()*24)|0; px[i]=(Math.random()-0.5)*8; py[i]=(Math.random()-0.5)*8; pz[i]=(Math.random()-0.5)*8; }
+
+/* ---------- palettes ---------- */
+var PALETTES=[
+  {name:'紫雾', colors:['#e9e4ff','#d6c8ff','#c4b0fb','#b294f9','#a678f5','#9668ef','#8657e8','#7447dd','#6539cf','#5830bd']},
+  {name:'星蓝', colors:['#e6f6ff','#c9ecff','#a5dcff','#7cc6ff','#55adfb','#3f97f2','#2f83e2','#256cc9','#1d57a8','#174485']},
+  {name:'玫瑰', colors:['#fff0f3','#ffdce6','#ffb9cd','#ff92b2','#fb719c','#f4548a','#e83a78','#d62666','#bd1d55','#9c1745']},
+  {name:'翡翠', colors:['#ecfdf7','#d2f9e8','#a9f0d2','#7de4ba','#52d69f','#34c487','#22ad72','#17935e','#0f7a4c','#0a5e3a']},
+  {name:'熔金', colors:['#fffbe8','#fff3c4','#ffeaa0','#ffdd78','#ffcc4f','#f9b832','#eda31f','#dd8a12','#c56f0b','#a35407']},
+  {name:'极光', colors:['#eafff8','#ccffe9','#a5f3d0','#7de8c3','#4fd8b4','#2ec5a5','#1aab94','#0f8f80','#0a7368','#065a52']},
+  {name:'落日', colors:['#fff4e0','#ffe3b3','#ffc98a','#ffab66','#ff8a4d','#fb703d','#f0562f','#dd3f24','#c22c1a','#a11f12']}
+];
+var shades=[]; // 24 rgb strings interpolated from active palette
+var glowEl=document.getElementById('coreGlow');
+function hexRgb(h){return [parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)];}
+function buildShades(pi){
+  var cols=PALETTES[pi].colors, out=[], s, a, b, t, j;
+  for(s=0;s<24;s++){
+    t=s/23*(cols.length-1); j=Math.floor(t); t-=j;
+    a=hexRgb(cols[j]); b=hexRgb(cols[Math.min(j+1,cols.length-1)]);
+    out.push('rgb('+Math.round(a[0]+(b[0]-a[0])*t)+','+Math.round(a[1]+(b[1]-a[1])*t)+','+Math.round(a[2]+(b[2]-a[2])*t)+')');
+  }
+  shades=out;
+  var g1=hexRgb(cols[6]), g2=hexRgb(cols[4]);
+  glowEl.style.background='radial-gradient(circle,rgba('+g1[0]+','+g1[1]+','+g1[2]+',.34) 0%,rgba('+g2[0]+','+g2[1]+','+g2[2]+',.12) 42%,transparent 68%)';
+}
+buildShades(0);
+
+/* ---------- background stars ---------- */
+var stars=[];
+function seedStars(){ stars=[]; for(var s=0;s<170;s++) stars.push({x:Math.random(),y:Math.random(),r:Math.random()*1.1+0.2,a:Math.random()*0.5+0.08,tw:Math.random()*Math.PI*2}); }
+seedStars();
+
+/* ---------- shape generators (local coords, radius ≈ 3.5) ---------- */
+function gauss(){ return (Math.random()+Math.random()+Math.random()-1.5)/1.5; }
+var SHAPES={
+  saturn:{label:'土星', mood:'环绕', gen:function(n){
+    if(Math.random()<0.44){ // core sphere
+      var u=Math.random()*2-1, th=Math.random()*Math.PI*2, s=Math.sqrt(1-u*u), r=1.3*(0.82+Math.random()*0.3);
+      return [s*Math.cos(th)*r, u*r*0.92, s*Math.sin(th)*r];
+    }
+    var a=Math.random()*Math.PI*2, rr=2.0+Math.pow(Math.random(),0.7)*1.9;
+    return [Math.cos(a)*rr, gauss()*0.09, Math.sin(a)*rr];
+  }},
+  galaxy:{label:'星系', mood:'旋臂', gen:function(){
+    var arm=(Math.random()*3)|0, r=Math.pow(Math.random(),0.62)*3.5;
+    var a=arm*(Math.PI*2/3)+r*1.15+gauss()*0.32*(1.2-r/4);
+    return [Math.cos(a)*r, gauss()*0.30*(1-r/4.4)+gauss()*0.05, Math.sin(a)*r];
+  }},
+  nebula:{label:'星云', mood:'弥漫', gen:function(){
+    var clumps=[[0,0,0],[1.5,0.5,-0.6],[-1.4,-0.4,0.7],[0.4,-0.9,-1.1]];
+    var c=clumps[(Math.random()*clumps.length)|0];
+    return [c[0]+gauss()*1.55, c[1]+gauss()*0.95, c[2]+gauss()*1.3];
+  }},
+  sphere:{label:'星球', mood:'凝聚', gen:function(){
+    var u=Math.random()*2-1, th=Math.random()*Math.PI*2, s=Math.sqrt(1-u*u);
+    var r = Math.random()<0.82 ? 2.25+gauss()*0.14 : Math.random()*1.4;
+    return [s*Math.cos(th)*r, u*r, s*Math.sin(th)*r];
+  }},
+  heart:{label:'爱心', mood:'心动', gen:function(){
+    var t=Math.random()*Math.PI*2;
+    var x=16*Math.pow(Math.sin(t),3);
+    var y=13*Math.cos(t)-5*Math.cos(2*t)-2*Math.cos(3*t)-Math.cos(4*t);
+    var fill=Math.pow(Math.random(),0.5), z=gauss()*1.15*(1.1-fill*0.5);
+    return [x*0.155*fill, y*0.155*fill-0.25, z];
+  }},
+  helix:{label:'双螺旋', mood:'交缠', gen:function(){
+    var strand=Math.random()<0.5?0:Math.PI, tt=(Math.random()*2-1)*3.1;
+    if(Math.random()<0.10){ var k=Math.random(); return [Math.cos(tt*2.1)*1.35*(1-k)+Math.cos(tt*2.1+Math.PI)*1.35*k, tt, Math.sin(tt*2.1)*1.35*(1-k)+Math.sin(tt*2.1+Math.PI)*1.35*k]; }
+    var a=tt*2.1+strand;
+    return [Math.cos(a)*1.35+gauss()*0.09, tt, Math.sin(a)*1.35+gauss()*0.09];
+  }},
+  supernova:{label:'超新星', mood:'爆发', gen:function(){
+    var u=Math.random()*2-1, th=Math.random()*Math.PI*2, s=Math.sqrt(1-u*u), m=Math.random(), r;
+    if(m<0.60) r=2.55+gauss()*0.34;            // bright expanding shell
+    else if(m<0.86) r=Math.random()*1.15;      // dense remnant core
+    else r=3.1+Math.random()*1.15;             // ejected sparks
+    return [s*Math.cos(th)*r, u*r, s*Math.sin(th)*r];
+  }},
+  butterfly:{label:'蝶翼', mood:'双极', gen:function(){
+    var side=Math.random()<0.5?-1:1, t=Math.random();
+    var along=side*(0.55+Math.pow(t,0.8)*2.6);
+    var rad=(0.30+Math.sin(t*Math.PI)*1.05)*(0.35+Math.random()*0.65);
+    var a=Math.random()*Math.PI*2;
+    return [along, Math.cos(a)*rad*0.82, Math.sin(a)*rad];
+  }},
+  blackhole:{label:'黑洞', mood:'吸积', gen:function(){
+    var m=Math.random();
+    if(m<0.07){ // glowing core at the event horizon
+      var u=Math.random()*2-1, th=Math.random()*Math.PI*2, s=Math.sqrt(1-u*u), r=0.42+Math.random()*0.2;
+      return [s*Math.cos(th)*r, u*r, s*Math.sin(th)*r];
+    }
+    if(m<0.11){ // polar jets
+      var jy=(Math.random()<0.5?-1:1)*(0.6+Math.pow(Math.random(),1.6)*2.6);
+      return [gauss()*0.10, jy, gauss()*0.10];
+    }
+    var a=Math.random()*Math.PI*2;
+    var rr=1.05+Math.pow(Math.random(),1.35)*2.55;   // accretion disc, denser toward the rim
+    var thick=0.05+(rr-1.05)*0.05;
+    return [Math.cos(a)*rr, gauss()*thick, Math.sin(a)*rr];
+  }}
+};
+var currentShape='saturn';
+function setTargets(name){
+  customShape=false;
+  var g=SHAPES[name].gen;
+  for(var k=0;k<N;k++){ var p=g(k); tx[k]=p[0]; ty[k]=p[1]; tz[k]=p[2]; }
+  document.getElementById('readoutShape').textContent=SHAPES[name].label;
+  document.getElementById('readoutMood').textContent=SHAPES[name].mood;
+}
+setTargets('saturn');
+document.getElementById('statParticles').textContent=N.toLocaleString('zh-CN')+' 粒子';
+
+/* ---------- interaction state ---------- */
+var spread=1, spreadT=1;          // expansion factor
+var zoom=1, zoomT=1;              // pinch / wheel zoom
+var rotY=0.4, rotX=-0.42, rotYT=0.4, rotXT=-0.42;
+var autoSpin=0.0016, spinBoost=0, swirl=0;
+var handActive=false, lastHandSeen=0;
+var mouseDown=false;
+var well={on:false,x:0,y:0,z:0};              // touch / mouse gravity well
+var musicOn=false, musicPulse=0, musicLevel=0, lastBeat=0;
+var duoOn=false;
+var customShape=false;
+
+var rings=[];   // shockwave rings from bursts
+var sparks=[];  // cursor spark trail
+var meteors=[]; // background shooting stars
+function burst(power){
+  power=power||1;
+  for(var k=0;k<drawN;k++){
+    var dx=px[k],dy=py[k],dz=pz[k],len=Math.sqrt(dx*dx+dy*dy+dz*dz)||0.3;
+    var f=(0.05+Math.random()*0.11)*power;
+    vx[k]+=dx/len*f; vy[k]+=dy/len*f; vz[k]+=dz/len*f;
+  }
+  if(rings.length<3) rings.push({r:12,a:0.55});
+}
+
+/* ---------- resize ---------- */
+function resize(){
+  DPR=Math.min(window.devicePixelRatio||1,2);
+  W=window.innerWidth; H=window.innerHeight; CX=W/2; CY=H/2;
+  canvas.width=W*DPR; canvas.height=H*DPR;
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+}
+window.addEventListener('resize',resize); resize();
+
+/* ---------- main loop ---------- */
+var frames=0, fpsT=performance.now(), frameNo=0;
+var energyFill=document.getElementById('energyFill'), energyVal=document.getElementById('energyVal');
+function loop(now){
+  requestAnimationFrame(loop);
+  frames++; frameNo++;
+  if(now-fpsT>1000){
+    document.getElementById('statFps').textContent=frames+' FPS';
+    // adaptive quality: keep the motion smooth on weaker devices
+    if(frames<26 && drawN>Math.floor(N*0.55)) drawN=Math.max(Math.floor(N*0.55), drawN-2500);
+    else if(frames>50 && drawN<N) drawN=Math.min(N, drawN+1500);
+    frames=0; fpsT=now;
+  }
+
+  if(handActive && now-lastHandSeen>900){ handActive=false; spreadT=1; zoomT=1; spinBoost=0; swirl=0; if(typeof gHist!=='undefined') gHist.length=0; setGestureUI(null); }
+
+  // sanitizers: a NaN target or value would silently blank every particle
+  // (fillRect with NaN coords draws nothing) and could never recover on its own
+  if(!isFinite(spreadT)) spreadT=1;
+  if(!isFinite(zoomT)) zoomT=1;
+  if(musicOn) sampleMusic(now);
+  var sTarget = musicOn ? spreadT*(1+musicPulse*0.5) : spreadT;
+  spread += (sTarget-spread)*0.045;
+  zoom   += (zoomT-zoom)*0.08;
+  if(!isFinite(spread)) spread=spreadT;
+  if(!isFinite(zoom)) zoom=zoomT;
+  rotX   += (rotXT-rotX)*0.06;
+  rotY   += (rotYT-rotY)*0.06;
+  rotYT  += autoSpin + spinBoost;
+  spinBoost*=0.96; swirl*=0.95;
+
+  ctx.fillStyle='#040309';
+  ctx.fillRect(0,0,W,H);
+
+  // bg stars
+  var s, st;
+  for(s=0;s<stars.length;s++){ st=stars[s];
+    ctx.globalAlpha=st.a*(0.7+0.3*Math.sin(now*0.001+st.tw));
+    ctx.fillStyle='#cfc4f5';
+    ctx.fillRect(st.x*W, st.y*H, st.r, st.r);
+  }
+  ctx.globalAlpha=1;
+
+  // shooting stars, now and then
+  if(Math.random()<0.004 && meteors.length<2)
+    meteors.push({x:W*0.25+Math.random()*W*0.65, y:Math.random()*H*0.28, vx:-(5.5+Math.random()*5), vy:2.6+Math.random()*2.2, life:1});
+  ctx.strokeStyle='#e6dcff'; ctx.lineCap='round';
+  for(s=meteors.length-1;s>=0;s--){ var mt=meteors[s];
+    ctx.globalAlpha=mt.life*0.75; ctx.lineWidth=1.6;
+    ctx.beginPath(); ctx.moveTo(mt.x,mt.y); ctx.lineTo(mt.x-mt.vx*11, mt.y-mt.vy*11); ctx.stroke();
+    mt.x+=mt.vx; mt.y+=mt.vy; mt.life-=0.016;
+    if(mt.life<=0||mt.x<-60) meteors.splice(s,1);
+  }
+  ctx.globalAlpha=1;
+
+  var cosY=Math.cos(rotY), sinY=Math.sin(rotY), cosX=Math.cos(rotX), sinX=Math.sin(rotX);
+  var baseScale=Math.min(W,H)/9.2*zoom;
+  var fov=7.5, k, X,Y,Z, xr,yr,zr, persp, sx,sy, sz2, tw, di;
+
+  ctx.globalCompositeOperation='lighter';
+  for(k=0;k<drawN;k++){
+    // gravity well: a held finger/mouse drags particles into a swirling sink
+    if(well.on){
+      var wdx=well.x-px[k], wdy=well.y-py[k], wdz=well.z-pz[k];
+      var wd=Math.sqrt(wdx*wdx+wdy*wdy+wdz*wdz)+0.001;
+      if(wd<4.6){
+        var wf=0.055*(1-wd/4.6);
+        vx[k]+=(wdx/wd)*wf*0.55 + (-wdz/wd)*wf*0.5;
+        vy[k]+=(wdy/wd)*wf*0.55;
+        vz[k]+=(wdz/wd)*wf*0.55 + (wdx/wd)*wf*0.5;
+      }
+    }
+    // spring toward (scaled) target
+    vx[k]+=(tx[k]*spread-px[k])*0.018;
+    vy[k]+=(ty[k]*spread-py[k])*0.018;
+    vz[k]+=(tz[k]*spread-pz[k])*0.018;
+    // swirl around Y axis
+    if(swirl>0.003){
+      var rx=px[k], rz=pz[k];
+      vx[k]+=(-rz)*swirl*0.012; vz[k]+=(rx)*swirl*0.012;
+    }
+    vx[k]*=0.90; vy[k]*=0.90; vz[k]*=0.90;
+    px[k]+=vx[k]; py[k]+=vy[k]; pz[k]+=vz[k];
+
+    X=px[k]; Y=py[k]+Math.sin(now*0.0011+pPhase[k])*0.035; Z=pz[k];
+    // rotate Y then X
+    xr=X*cosY - Z*sinY; zr=X*sinY + Z*cosY;
+    yr=Y*cosX - zr*sinX; zr=Y*sinX + zr*cosX;
+    persp=fov/(fov+zr+4.2);
+    sx=CX+xr*baseScale*persp;
+    sy=CY+yr*baseScale*persp;
+    if(sx<-10||sx>W+10||sy<-10||sy>H+10) continue;
+    sz2=pSize[k]*persp*1.55;
+    tw=0.74+0.26*Math.sin(now*0.0022+pPhase[k]*3.1);            // per-particle twinkle
+    di=pShade[k]+(((persp-0.62)*14)|0);                          // nearer = brighter shade
+    if(di<0)di=0; else if(di>23)di=23;
+    ctx.globalAlpha=Math.max(0.05, Math.min(0.95,(persp-0.30)*1.5))*tw;
+    ctx.fillStyle=shades[di];
+    ctx.fillRect(sx-sz2/2, sy-sz2/2, sz2, sz2);
+  }
+  ctx.globalAlpha=1;
+  ctx.globalCompositeOperation='source-over';
+
+  // burst shockwave rings (screen-space ellipse matching the disc tilt)
+  for(s=rings.length-1;s>=0;s--){ var rg=rings[s];
+    ctx.globalAlpha=rg.a; ctx.strokeStyle='#c9b8ff'; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.ellipse(CX,CY,rg.r,rg.r*0.45,0,0,Math.PI*2); ctx.stroke();
+    rg.r+=7.5; rg.a*=0.94;
+    if(rg.a<0.02) rings.splice(s,1);
+  }
+  ctx.globalAlpha=1;
+
+  // cursor spark trail
+  if(sparks.length){
+    ctx.fillStyle='#e2d8ff';
+    for(s=sparks.length-1;s>=0;s--){ var sp=sparks[s];
+      ctx.globalAlpha=sp.life*0.65;
+      ctx.fillRect(sp.x-1,sp.y-1,2,2);
+      sp.x+=sp.vx; sp.y+=sp.vy; sp.life-=0.03;
+      if(sp.life<=0) sparks.splice(s,1);
+    }
+    ctx.globalAlpha=1;
+  }
+
+  // atmosphere + readout, throttled
+  if(frameNo%4===0){
+    var go=0.60-(spread-0.45)*0.16;
+    glowEl.style.opacity=Math.max(0.16,Math.min(0.62,go)).toFixed(3);
+    glowEl.style.transform='translate(-50%,-50%) scale('+(zoom*(0.9+spread*0.14)).toFixed(3)+')';
+  }
+  if(frameNo%10===0){
+    var ep = musicOn ? Math.max(4,Math.min(100,musicLevel*100)) : Math.max(4,Math.min(100,(spread-0.40)/1.60*100));
+    energyFill.style.width=ep.toFixed(0)+'%';
+    energyVal.textContent = musicOn ? '律动中' : (spread<0.8 ? '聚合' : (spread>1.35 ? '绽放' : '舒展'));
+  }
+}
+requestAnimationFrame(loop);
+
+/* ============================================================
+   Controls — shapes / colours / dock
+   ============================================================ */
+var shapeBtns=document.querySelectorAll('[data-shape]');
+shapeBtns.forEach(function(b){
+  b.addEventListener('click',function(){
+    shapeBtns.forEach(function(x){x.classList.remove('on');});
+    b.classList.add('on');
+    currentShape=b.getAttribute('data-shape');
+    setTargets(currentShape);
+    burst(0.45);
+  });
+});
+var swWrap=document.getElementById('swatches');
+PALETTES.forEach(function(p,idx){
+  var b=document.createElement('button');
+  b.className='swatch'+(idx===0?' on':'');
+  b.title=p.name;
+  b.style.background='linear-gradient(135deg,'+p.colors[2]+','+p.colors[7]+')';
+  b.setAttribute('aria-label','配色 '+p.name);
+  b.addEventListener('click',function(){
+    swWrap.querySelectorAll('.swatch').forEach(function(x){x.classList.remove('on');});
+    b.classList.add('on'); buildShades(idx);
+  });
+  swWrap.appendChild(b);
+});
+document.getElementById('btnBurst').addEventListener('click',function(){ burst(1.3); toast('粒子 <span>绽放</span>'); });
+document.getElementById('btnFull').addEventListener('click',function(){
+  if(document.fullscreenElement) document.exitFullscreen();
+  else if(document.documentElement.requestFullscreen) document.documentElement.requestFullscreen();
+});
+
+/* ---------- mouse / touch fallback ---------- */
+var lastPX=null,lastPY=null;
+function updateWell(e){
+  var bs=Math.min(W,H)/9.2*zoom || 1;
+  var xr=(e.clientX-CX)/bs, yr=(e.clientY-CY)/bs;
+  // screen plane -> local space: undo the X rotation, then the Y rotation (z=0 plane)
+  var Y=yr*Math.cos(rotX), zr=-yr*Math.sin(rotX);
+  well.x=xr*Math.cos(rotY)+zr*Math.sin(rotY);
+  well.y=Y;
+  well.z=-xr*Math.sin(rotY)+zr*Math.cos(rotY);
+}
+canvas.addEventListener('pointermove',function(e){
+  if(handActive) return;
+  if(mouseDown){ updateWell(e); lastPX=e.clientX; lastPY=e.clientY; return; }
+  if(lastPX!==null){
+    // delta-driven orbit, same feel as turning a globe: vertical travel pitches
+    // the formation and horizontal travel yaws it. No clamp on pitch — keep
+    // stroking and it flips all the way over (the old absolute mapping capped
+    // tilt at ±1.1 rad, so the planet could never actually flip).
+    rotYT += (e.clientX-lastPX)*0.0042;
+    rotXT += (e.clientY-lastPY)*0.0042;
+  }
+  if(lastPX!==null && Math.abs(e.clientX-lastPX)+Math.abs(e.clientY-lastPY)>5 && sparks.length<80){
+    sparks.push({x:e.clientX,y:e.clientY,vx:(Math.random()-0.5)*0.7,vy:-0.3-Math.random()*0.6,life:1});
+    sparks.push({x:e.clientX,y:e.clientY,vx:(Math.random()-0.5)*0.7,vy:-0.2-Math.random()*0.5,life:0.8});
+  }
+  lastPX=e.clientX; lastPY=e.clientY;
+});
+canvas.addEventListener('pointerdown',function(e){ mouseDown=true; well.on=true; updateWell(e); burst(0.3); });
+window.addEventListener('pointerup',function(){ if(mouseDown){ mouseDown=false; well.on=false; if(!handActive) spreadT=1; } });
+canvas.addEventListener('wheel',function(e){
+  e.preventDefault();
+  zoomT=Math.max(0.45,Math.min(2.4, zoomT - e.deltaY*0.0012));
+},{passive:false});
+canvas.addEventListener('dblclick',function(){
+  // one clean half-turn: rotX eases toward rotXT in the render loop, so the
+  // formation swings smoothly over instead of snapping
+  rotXT += Math.PI;
+  toast('星球 <span>翻转</span>');
+});
+window.addEventListener('keydown',function(e){
+  var names=['saturn','galaxy','nebula','sphere','heart','helix','supernova','butterfly','blackhole'];
+  if(e.key>='1'&&e.key<='9'){ var nm=names[+e.key-1]; shapeBtns.forEach(function(x){x.classList.toggle('on',x.getAttribute('data-shape')===nm);}); currentShape=nm; setTargets(nm); burst(0.45); }
+  if(e.key===' '){ e.preventDefault(); burst(1.3); }
+});
+
+/* ---------- gesture toast + UI ---------- */
+var toastEl=document.getElementById('gestureToast'), toastTimer=null;
+function toast(html){
+  toastEl.innerHTML=html; toastEl.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(function(){ toastEl.classList.remove('show'); },1700);
+}
+var GESTURE_INFO={
+  open:{name:'张开手掌', hint:'粒子正在向外绽放', toast:'张开手掌 · 粒子 <span>绽放</span>'},
+  fist:{name:'握紧拳头', hint:'粒子正在向中心聚合', toast:'握紧拳头 · 粒子 <span>聚合</span>'},
+  pinch:{name:'拇指捏合', hint:'松紧控制整体缩放', toast:'捏合 · <span>缩放</span>'},
+  point:{name:'伸出食指', hint:'粒子被搅动加速旋转', toast:'食指搅动 · <span>旋转加速</span>'},
+  two:{name:'双指比耶', hint:'舒缓旋转，微微张开', toast:'双指 · <span>舒缓</span>'},
+  move:{name:'手掌移动', hint:'星系跟随手的方位倾斜', toast:''},
+  duoIn:{name:'双手合拢', hint:'双手引力把粒子聚到一起', toast:'双手合拢 · 粒子 <span>聚合</span>'},
+  duoOut:{name:'双手拉开', hint:'粒子被拉成一片星河', toast:'双手拉开 · <span>星河展开</span>'},
+  duo:{name:'双手控制', hint:'双手距离决定引力大小', toast:''}
+};
+var currentGesture=null;
+var statGestureEl=document.getElementById('statGesture');
+function setGestureUI(g){
+  var nameEl=document.getElementById('gestureName'), hintEl=document.getElementById('gestureHint');
+  document.querySelectorAll('.guide li').forEach(function(li){ var dg=li.getAttribute('data-g'); li.classList.toggle('active', dg===g || (dg==='duo' && !!g && g.indexOf('duo')===0)); });
+  if(!g){ nameEl.textContent= handActive?'已识别手掌':'等待手势'; hintEl.textContent= handActive?'做个手势试试':'开启摄像头后对镜头做手势'; statGestureEl.textContent='手势 —'; currentGesture=null; return; }
+  var info=GESTURE_INFO[g]; if(!info) return;
+  nameEl.textContent=info.name; hintEl.textContent=info.hint;
+  statGestureEl.textContent='手势 · '+info.name;
+  if(g!==currentGesture){ currentGesture=g; if(info.toast) toast(info.toast); }
+}
+
+/* ============================================================
+   Camera + MediaPipe Hands
+   ============================================================ */
+var video=document.getElementById('camVideo');
+var overlay=document.getElementById('camOverlay');
+var octx=overlay.getContext('2d');
+var btnCam=document.getElementById('btnCam');
+var statusPill=document.getElementById('statusPill');
+var statusText=document.getElementById('statusText');
+var errBar=document.getElementById('errBar');
+var camOn=false, handsObj=null, sending=false, streamRef=null, prevGesture=null;
+
+function showErr(msg){ errBar.textContent=msg; errBar.classList.add('show'); setTimeout(function(){errBar.classList.remove('show');},6000); }
+
+function dist(a,b){ var dx=a.x-b.x, dy=a.y-b.y; return Math.sqrt(dx*dx+dy*dy); }
+
+function classify(lm){
+  var wrist=lm[0], palm=dist(lm[0],lm[9])||0.001;
+  var tips=[8,12,16,20], pips=[6,10,14,18], ext=0, extMap=[];
+  for(var j=0;j<4;j++){
+    var e = dist(lm[tips[j]],wrist) > dist(lm[pips[j]],wrist)*1.22;
+    extMap.push(e); if(e) ext++;
+  }
+  var thumbExt = dist(lm[4],lm[17]) > dist(lm[3],lm[17])*1.12;
+  var pinchD = dist(lm[4],lm[8])/palm;
+  var openAvg=0; for(var q=0;q<4;q++) openAvg+=dist(lm[tips[q]],lm[0]); openAvg=openAvg/4/palm;
+
+  // fist first: in a fist the thumb tip rests against the folded index finger,
+  // so pinchD is small too — checking pinch first misreads most fists as pinches
+  if(ext===0 && !thumbExt) return {g:'fist'};
+  if(pinchD<0.38 && ext<3) return {g:'pinch', pinch:pinchD};
+  if(ext>=4 || openAvg>1.62) return {g:'open'};
+  if(ext===1 && extMap[0]) return {g:'point'};
+  if(ext===2 && extMap[0] && extMap[1]) return {g:'two'};
+  return {g:'move'};
+}
+
+function applyGesture(res, lm){
+  var cx=1-lm[9].x, cy=lm[9].y; // mirrored x
+  rotYT += ((cx-0.5)*0.05);
+  // pitch is rate-controlled, exactly like yaw above: holding the hand above
+  // centre keeps the formation pitching until it flips right over, holding it
+  // below centre pitches it back, and near centre (dead zone) it stays put.
+  // The old absolute mapping clamped tilt to ±1.15 rad — it could never flip.
+  var tiltIn=cy-0.5;
+  if(Math.abs(tiltIn)>0.06) rotXT += tiltIn*0.10;
+  autoSpin=0.0012;
+  if(res.g==='open'){
+    if(prevGesture!=='open') burst(1.15);
+    spreadT=1.85;
+  } else if(res.g==='fist'){
+    spreadT=0.48;
+  } else if(res.g==='pinch'){
+    spreadT=1;
+    // the smoothed label can say "pinch" on a frame whose own classify() did not
+    // return a pinch value — never let an undefined/NaN pinch reach zoomT,
+    // because a NaN zoom is absorbing: every particle coordinate turns NaN
+    var pd=(typeof res.pinch==='number' && isFinite(res.pinch)) ? res.pinch : 0.45;
+    zoomT=0.55 + pd*1.5;
+    if(!isFinite(zoomT)) zoomT=1;
+    zoomT=Math.max(0.5,Math.min(2.3, zoomT));
+  } else if(res.g==='point'){
+    spreadT=1.05; swirl=1; spinBoost=0.012;
+  } else if(res.g==='two'){
+    spreadT=1.22;
+  } else {
+    spreadT=1;
+  }
+  prevGesture=res.g;
+  setGestureUI(res.g);
+}
+
+var prevDuoBand='';
+function applyDuo(lmA, lmB){
+  var ax=lmA[9].x, ay=lmA[9].y, bx=lmB[9].x, by=lmB[9].y;
+  var d=Math.sqrt((ax-bx)*(ax-bx)+(ay-by)*(ay-by));
+  var mx=1-(ax+bx)/2, my=(ay+by)/2; // midpoint, mirrored x
+  rotYT += ((mx-0.5)*0.05);
+  var tiltInDuo=my-0.5;
+  if(Math.abs(tiltInDuo)>0.06) rotXT += tiltInDuo*0.10;
+  autoSpin=0.0012;
+  spreadT=Math.max(0.45, Math.min(2.15, 0.45+(d-0.12)*2.3));
+  var band = d<0.30 ? 'duoIn' : (d>0.55 ? 'duoOut' : 'duo');
+  if(band==='duoOut'){ swirl=0.7; spinBoost=0.006; if(prevDuoBand!=='duoOut') burst(0.7); }
+  prevDuoBand=band;
+  setGestureUI(band);
+}
+
+var CONNECTIONS=[[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[5,9],[9,10],[10,11],[11,12],[9,13],[13,14],[14,15],[15,16],[13,17],[17,18],[18,19],[19,20],[0,17]];
+function drawHand(lm){
+  octx.strokeStyle='rgba(167,139,250,.85)'; octx.lineWidth=2; octx.lineCap='round';
+  octx.beginPath();
+  CONNECTIONS.forEach(function(c){
+    octx.moveTo(lm[c[0]].x*overlay.width, lm[c[0]].y*overlay.height);
+    octx.lineTo(lm[c[1]].x*overlay.width, lm[c[1]].y*overlay.height);
+  });
+  octx.stroke();
+  octx.fillStyle='#e9e4ff';
+  octx.shadowColor='rgba(167,139,250,.95)'; octx.shadowBlur=7;
+  lm.forEach(function(p){ octx.beginPath(); octx.arc(p.x*overlay.width,p.y*overlay.height,2.4,0,Math.PI*2); octx.fill(); });
+  octx.shadowBlur=0;
+}
+
+/* majority vote over recent frames — stops the gesture readout flickering */
+var gHist=[];
+var lastPinch=0.45; // most recent valid pinch ratio, so a smoothed "pinch" label always has a real value to work with
+function smoothGesture(g){
+  gHist.push(g); if(gHist.length>6) gHist.shift();
+  var counts={}, best=g, bn=0;
+  for(var q=0;q<gHist.length;q++){ var x=gHist[q]; counts[x]=(counts[x]||0)+1; if(counts[x]>bn){ bn=counts[x]; best=x; } }
+  return best;
+}
+
+function onResults(results){
+  sending=false;
+  if(results.multiHandLandmarks && results.multiHandLandmarks.length){
+    if(duoOn && results.multiHandLandmarks.length>=2){
+      handActive=true; lastHandSeen=performance.now();
+      octx.clearRect(0,0,overlay.width,overlay.height);
+      drawHand(results.multiHandLandmarks[0]);
+      drawHand(results.multiHandLandmarks[1]);
+      applyDuo(results.multiHandLandmarks[0], results.multiHandLandmarks[1]);
+      return;
+    }
+    var lm=results.multiHandLandmarks[0];
+    handActive=true; lastHandSeen=performance.now();
+    octx.clearRect(0,0,overlay.width,overlay.height);
+    drawHand(lm);
+    var res=classify(lm);
+    if(res.g==='pinch' && typeof res.pinch==='number' && isFinite(res.pinch)) lastPinch=res.pinch;
+    applyGesture({g:smoothGesture(res.g), pinch:lastPinch}, lm);
+  } else {
+    octx.clearRect(0,0,overlay.width,overlay.height);
+    if(handActive && performance.now()-lastHandSeen>400){ prevGesture=null; gHist.length=0; }
+  }
+}
+
+function pumpFrames(){
+  if(!camOn) return;
+  if(handsObj && !sending && video.readyState>=2){
+    sending=true;
+    handsObj.send({image:video}).catch(function(){ sending=false; });
+  }
+  requestAnimationFrame(pumpFrames);
+}
+
+btnCam.addEventListener('click', function(){
+  if(camOn){ stopCamera(); return; }
+  startCamera();
+});
+
+function startCamera(){
+  if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+    showErr('这个浏览器不支持调用摄像头，请换 Chrome / Edge / Safari 再试，或直接用鼠标体验。');
+    return;
+  }
+  btnCam.textContent='正在开启…';
+  navigator.mediaDevices.getUserMedia({video:{facingMode:'user',width:{ideal:640},height:{ideal:480}},audio:false})
+  .then(function(stream){
+    streamRef=stream;
+    video.srcObject=stream;
+    return video.play();
+  })
+  .then(function(){
+    camOn=true;
+    document.getElementById('camView').classList.add('live');
+    document.getElementById('camCard').classList.add('live');
+    btnCam.textContent='关闭摄像头';
+    btnCam.classList.add('on-cam');
+    statusPill.classList.add('on');
+    if(typeof window.Hands!=='undefined'){
+      statusText.innerHTML='手势模式 · <b>摄像头已开启</b>';
+      handsObj=new window.Hands({locateFile:function(f){ return 'https://cdn.jsdelivr.net/npm/@mediapipe/hands/'+f; }});
+      handsObj.setOptions({maxNumHands: duoOn?2:1, modelComplexity:0, minDetectionConfidence:0.6, minTrackingConfidence:0.5});
+      handsObj.onResults(onResults);
+      toast('摄像头已开启 · 把手 <span>伸到镜头前</span>');
+    } else {
+      statusText.innerHTML='预览模式 · <b>识别库未加载</b>';
+      showErr('手势识别库加载失败（可能断网），摄像头画面已打开，粒子可用鼠标控制。');
+    }
+    pumpFrames();
+  })
+  .catch(function(err){
+    btnCam.textContent='开启摄像头';
+    if(err && (err.name==='NotAllowedError'||err.name==='PermissionDeniedError'))
+      showErr('摄像头权限被拒绝了。在浏览器地址栏的站点设置里允许摄像头后，再点一次「开启摄像头」。');
+    else if(err && err.name==='NotFoundError')
+      showErr('没有检测到摄像头设备，可以先用鼠标拖动、滚轮和空格键体验。');
+    else
+      showErr('摄像头打开失败（'+(err&&err.name?err.name:'未知错误')+'），可以先用鼠标体验。');
+  });
+}
+
+function stopCamera(){
+  camOn=false;
+  if(streamRef){ streamRef.getTracks().forEach(function(t){ t.stop(); }); streamRef=null; }
+  video.srcObject=null;
+  if(handsObj){ try{ handsObj.close(); }catch(e){} handsObj=null; }
+  document.getElementById('camView').classList.remove('live');
+  document.getElementById('camCard').classList.remove('live');
+  btnCam.textContent='开启摄像头';
+  btnCam.classList.remove('on-cam');
+  statusPill.classList.remove('on');
+  statusText.innerHTML='鼠标模式 · <b>未开启摄像头</b>';
+  handActive=false; spreadT=1; zoomT=1; swirl=0; spinBoost=0; gHist.length=0;
+  octx.clearRect(0,0,overlay.width,overlay.height);
+  setGestureUI(null);
+}
+
+/* ============================================================
+   New plays — music rhythm / two hands / text & photo morph / record
+   ============================================================ */
+var analyser=null, freqData=null, audioCtx=null, micStream=null;
+function sampleMusic(now){
+  if(!analyser || !freqData){ musicPulse*=0.9; musicLevel*=0.95; return; }
+  analyser.getByteFrequencyData(freqData);
+  var bass=0, mid=0, i;
+  for(i=2;i<10;i++) bass+=freqData[i];
+  bass=bass/8/255;
+  for(i=10;i<40;i++) mid+=freqData[i];
+  mid=mid/30/255;
+  musicLevel += (Math.min(1, bass*1.15+mid*0.35)-musicLevel)*0.35;
+  musicPulse += (bass-musicPulse)*0.5;
+  if(bass>0.72 && now-lastBeat>300){ lastBeat=now; burst(0.55); spinBoost=Math.max(spinBoost,0.004); }
+}
+var btnMusic=document.getElementById('btnMusic');
+btnMusic.addEventListener('click',function(){
+  if(musicOn){ stopMusic(); return; }
+  if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){ showErr('这个浏览器不支持麦克风，音乐律动用不了，可以换 Chrome / Edge 试试。'); return; }
+  btnMusic.textContent='正在开启…';
+  navigator.mediaDevices.getUserMedia({audio:true})
+  .then(function(stream){
+    micStream=stream;
+    var AC=window.AudioContext||window.webkitAudioContext;
+    audioCtx=new AC();
+    if(audioCtx.resume) audioCtx.resume();
+    var src=audioCtx.createMediaStreamSource(stream);
+    analyser=audioCtx.createAnalyser();
+    analyser.fftSize=256; analyser.smoothingTimeConstant=0.55;
+    freqData=new Uint8Array(analyser.frequencyBinCount);
+    src.connect(analyser);
+    musicOn=true;
+    btnMusic.textContent='音乐律动';
+    btnMusic.classList.add('on');
+    toast('音乐律动 · 放首歌，粒子 <span>跟着节拍跳</span>');
+  })
+  .catch(function(){
+    btnMusic.textContent='音乐律动';
+    showErr('麦克风没打开：律动模式要靠麦克风听环境里的音乐。在浏览器站点设置里允许麦克风后，再点一次。');
+  });
+});
+function stopMusic(){
+  musicOn=false; musicPulse=0; musicLevel=0;
+  if(micStream){ micStream.getTracks().forEach(function(t){ t.stop(); }); micStream=null; }
+  if(audioCtx){ try{ audioCtx.close(); }catch(e){} audioCtx=null; }
+  analyser=null; freqData=null;
+  btnMusic.textContent='音乐律动';
+  btnMusic.classList.remove('on');
+}
+
+var btnDuo=document.getElementById('btnDuo');
+btnDuo.addEventListener('click',function(){
+  duoOn=!duoOn;
+  btnDuo.classList.toggle('on',duoOn);
+  if(handsObj){ try{ handsObj.setOptions({maxNumHands:duoOn?2:1, modelComplexity:0, minDetectionConfidence:0.6, minTrackingConfidence:0.5}); }catch(e){} }
+  if(duoOn) toast(camOn ? '双手模式 · 两只手一起 <span>伸到镜头前</span>' : '双手模式已开 · <span>开启摄像头后生效</span>');
+  else toast('双手模式 <span>已关闭</span>');
+});
+
+/* ----- particle text / photo morph ----- */
+function assignPoints(pts, label, mood){
+  if(!pts.length){ showErr('没能提取出轮廓，换一张对比更明显的照片试试。'); return; }
+  for(var k=0;k<N;k++){
+    var p=pts[(Math.random()*pts.length)|0];
+    tx[k]=p[0]+gauss()*0.035; ty[k]=p[1]+gauss()*0.035; tz[k]=gauss()*0.22;
+  }
+  customShape=true; currentShape='';
+  shapeBtns.forEach(function(x){ x.classList.remove('on'); });
+  document.getElementById('readoutShape').textContent=label;
+  document.getElementById('readoutMood').textContent=mood;
+  burst(0.5);
+}
+function textPoints(text){
+  var c=document.createElement('canvas'); c.width=260; c.height=130;
+  var g=c.getContext('2d');
+  var size=96;
+  g.textAlign='center'; g.textBaseline='middle';
+  do{ g.font='900 '+size+'px "Noto Sans SC","PingFang SC",sans-serif'; size-=6; }while(g.measureText(text).width>238 && size>26);
+  g.fillStyle='#fff';
+  g.fillText(text,130,68);
+  var img=g.getImageData(0,0,260,130).data, pts=[];
+  for(var y=0;y<130;y+=2) for(var x=0;x<260;x+=2){
+    if(img[(y*260+x)*4+3]>120) pts.push([(x-130)*0.027,(66-y)*0.027]);
+  }
+  return pts;
+}
+document.getElementById('btnText').addEventListener('click',function(){
+  var t=document.getElementById('textInput').value.trim();
+  if(!t){ toast('先在输入框里 <span>写几个字</span>'); return; }
+  userTouched=true;
+  assignPoints(textPoints(t), t, '拼字');
+  if(customShape) toast('粒子拼字 · <span>'+t.replace(/[<>&]/g,'')+'</span>');
+});
+document.getElementById('textInput').addEventListener('keydown',function(e){
+  e.stopPropagation();
+  if(e.key==='Enter') document.getElementById('btnText').click();
+});
+var filePhoto=document.getElementById('filePhoto');
+document.getElementById('btnPhoto').addEventListener('click',function(){ filePhoto.click(); });
+filePhoto.addEventListener('change',function(){
+  var f=filePhoto.files && filePhoto.files[0];
+  filePhoto.value='';
+  if(!f) return;
+  var url=URL.createObjectURL(f);
+  var img=new Image();
+  img.onload=function(){
+    URL.revokeObjectURL(url);
+    var maxD=190, sc=Math.min(1, maxD/Math.max(img.width,img.height));
+    var w=Math.max(8,Math.round(img.width*sc)), h=Math.max(8,Math.round(img.height*sc));
+    var c=document.createElement('canvas'); c.width=w; c.height=h;
+    var g=c.getContext('2d');
+    g.drawImage(img,0,0,w,h);
+    var data;
+    try{ data=g.getImageData(0,0,w,h).data; }catch(e){ showErr('这张照片读不了，换一张试试。'); return; }
+    function collect(thresh){
+      var pts=[], step=Math.max(1,Math.round(Math.sqrt(w*h/9000)));
+      for(var y=0;y<h;y+=step) for(var x=0;x<w;x+=step){
+        var idx=(y*w+x)*4;
+        if(data[idx+3]<100) continue;
+        var lum=0.2126*data[idx]+0.7152*data[idx+1]+0.0722*data[idx+2];
+        if(lum<thresh) pts.push([x-w/2, h/2-y]);
+      }
+      return pts;
+    }
+    var pts=collect(215);
+    if(pts.length<700) pts=collect(248);
+    if(pts.length<250) pts=collect(300);
+    var scp=6.9/Math.max(w,h);
+    var mapped=[];
+    for(var q=0;q<pts.length;q++) mapped.push([pts[q][0]*scp, pts[q][1]*scp]);
+    userTouched=true;
+    assignPoints(mapped,'照片','成像');
+    if(customShape) toast('照片成形 · 粒子 <span>照着照片排好了</span>');
+  };
+  img.onerror=function(){ URL.revokeObjectURL(url); showErr('这张照片读不了，换一张试试。'); };
+  img.src=url;
+});
+
+/* ----- record the canvas & download ----- */
+var recorder=null, recChunks=[], recTimer=null, recSec=0;
+var btnRec=document.getElementById('btnRec');
+btnRec.addEventListener('click',function(){
+  if(recorder && recorder.state==='recording'){ recorder.stop(); return; }
+  if(typeof MediaRecorder==='undefined' || !canvas.captureStream){ showErr('这个浏览器不支持录制，换 Chrome / Edge 试试。'); return; }
+  var stream=canvas.captureStream(60);
+  var mimes=['video/webm;codecs=vp9','video/webm;codecs=vp8','video/webm','video/mp4'], mime='';
+  for(var q=0;q<mimes.length;q++){ if(MediaRecorder.isTypeSupported(mimes[q])){ mime=mimes[q]; break; } }
+  try{ recorder=new MediaRecorder(stream, mime?{mimeType:mime, videoBitsPerSecond:10000000}:undefined); }
+  catch(e){ showErr('录制启动失败，换个浏览器试试。'); return; }
+  recChunks=[];
+  recorder.ondataavailable=function(e){ if(e.data && e.data.size) recChunks.push(e.data); };
+  recorder.onstop=function(){
+    clearInterval(recTimer);
+    btnRec.classList.remove('recording');
+    btnRec.textContent='录制视频';
+    var type=mime||'video/webm';
+    var blob=new Blob(recChunks,{type:type});
+    var a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    a.download='手势粒子-'+new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')+(type.indexOf('mp4')>=0?'.mp4':'.webm');
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function(){ URL.revokeObjectURL(a.href); },4000);
+    toast('录制完成 · <span>视频已下载</span>');
+  };
+  recorder.start(250);
+  recSec=0;
+  btnRec.classList.add('recording');
+  btnRec.textContent='停止 0:00';
+  recTimer=setInterval(function(){ recSec++; btnRec.textContent='停止 '+Math.floor(recSec/60)+':'+('0'+(recSec%60)).slice(-2); },1000);
+  toast('录制中 · <span>把你的玩法录下来</span>');
+});
+
+/* auto demo: gentle shape story until user interacts */
+var demoShapes=['saturn','galaxy','nebula','butterfly','blackhole','sphere'], demoIdx=0, userTouched=false;
+['pointerdown','wheel','keydown'].forEach(function(ev){ window.addEventListener(ev,function(){ userTouched=true; },{once:false}); });
+btnCam.addEventListener('click',function(){ userTouched=true; });
+setInterval(function(){
+  if(userTouched || camOn || document.hidden) return;
+  demoIdx=(demoIdx+1)%demoShapes.length;
+  var nm=demoShapes[demoIdx];
+  shapeBtns.forEach(function(x){ x.classList.toggle('on', x.getAttribute('data-shape')===nm); });
+  currentShape=nm; setTargets(nm);
+}, 9000);
+})();
+</script>
+</body>
+</html>
